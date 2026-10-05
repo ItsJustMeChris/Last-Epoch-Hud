@@ -1,34 +1,272 @@
-﻿using Il2Cpp;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using Il2CppLE.UI.Minimap;
+using MelonLoader;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace Mod.Cheats
 {
     internal class MapHack
     {
-        public static void OnSceneWasLoaded()
+        private const float DefaultRevealRadius = 40f;
+        private const float BoostRevealRadius = 8000f; // beast rifts can exceed 5000
+        private const float BoostDurationSeconds = 60f;
+        private const float LookupRetrySeconds = 1f;
+        private const float ErrorLogCooldownSeconds = 5f;
+        private const float RevealRadiusComparisonEpsilon = 0.01f;
+        private const string MinimapCanvasName = "DMMap Canvas";
+
+        private static Minimap? s_minimap;
+        private static GameObject? s_minimapCanvas;
+
+        private static int s_sceneVersion;
+        private static int s_boostedSceneVersion = -1;
+        private static bool s_boostApplied;
+        private static float s_restoreAt;
+        private static float s_nextLookupAt;
+        private static float s_nextErrorLogAt;
+        private static float s_originalRevealRadius = DefaultRevealRadius;
+        private static bool s_hasOriginalRevealRadius;
+        private static bool s_sceneManagerFallbackEnabled;
+        private static int s_lastActiveSceneHandle = -1;
+        private static bool s_hasLastActiveSceneHandle;
+
+        public static void InitializeSceneFallback()
         {
-            var dmmapCanvas = GameObject.Find("DMMap Canvas");
-            if (dmmapCanvas == null) return;
+            if (s_sceneManagerFallbackEnabled)
+                return;
 
-            var minimapFogOfWar = dmmapCanvas.GetComponent<MinimapFogOfWar>();
-            if (minimapFogOfWar == null) return;
-
-            if (Settings.mapHack)
+            try
             {
-                if (minimapFogOfWar.discoveryDistance != 5000.0f)
+                Scene activeScene = SceneManager.GetActiveScene();
+                s_lastActiveSceneHandle = activeScene.handle;
+                s_hasLastActiveSceneHandle = true;
+                s_sceneManagerFallbackEnabled = true;
+                MelonLogger.Msg("[MapHack] SceneManager active-scene fallback enabled.");
+            }
+            catch (Exception e)
+            {
+                LogErrorThrottled($"[MapHack] Failed to enable SceneManager fallback: {e.Message}");
+            }
+        }
+
+        public static void DisposeSceneFallback()
+        {
+            s_sceneManagerFallbackEnabled = false;
+            s_hasLastActiveSceneHandle = false;
+            s_lastActiveSceneHandle = -1;
+        }
+
+        public static void OnSceneWasInitialized()
+        {
+            ResetSceneState();
+        }
+
+        public static void OnUpdate(bool hasPlayer)
+        {
+            CheckActiveSceneChangedFallback();
+
+            // If toggled off mid-session, restore immediately if we previously boosted.
+            if (!Settings.mapHack)
+            {
+                RestoreIfNeeded(force: true);
+                return;
+            }
+
+            // Keep restore path independent from player availability.
+            RestoreIfNeeded(force: false);
+            if (s_boostApplied)
+                return;
+
+            if (!hasPlayer)
+                return;
+
+            // One reveal pulse per scene.
+            if (s_boostedSceneVersion == s_sceneVersion)
+                return;
+
+            if (!TryGetMinimapInstance(out Minimap? minimap) || minimap == null)
+                return;
+
+            if (TryGetRevealRadius(minimap, out float originalRevealRadius))
+            {
+                if (IsBoostRevealRadius(originalRevealRadius))
                 {
-                    minimapFogOfWar.discoveryDistance = 5000.0f;
+                    // Edge case: if we read while a previous pulse is still active,
+                    // never treat the boost value as the scene's baseline.
+                    s_originalRevealRadius = DefaultRevealRadius;
+                    s_hasOriginalRevealRadius = false;
+                }
+                else
+                {
+                    s_originalRevealRadius = originalRevealRadius;
+                    s_hasOriginalRevealRadius = true;
                 }
             }
-            else
+
+            if (!TrySetRevealRadius(minimap, BoostRevealRadius))
+                return;
+
+            s_boostApplied = true;
+            s_boostedSceneVersion = s_sceneVersion;
+            s_restoreAt = Time.unscaledTime + BoostDurationSeconds;
+            MelonLogger.Msg($"[MapHack] Temporarily set Minimap.RevealRadius to {BoostRevealRadius:F0} for {BoostDurationSeconds:F0}s.");
+        }
+
+        private static void RestoreIfNeeded(bool force)
+        {
+            if (!s_boostApplied)
+                return;
+
+            if (!force && Time.unscaledTime < s_restoreAt)
+                return;
+
+            if (!TryGetMinimapInstance(out Minimap? minimap) || minimap == null)
+                return;
+
+            float restoreValue = s_hasOriginalRevealRadius ? s_originalRevealRadius : DefaultRevealRadius;
+            if (IsBoostRevealRadius(restoreValue))
+                restoreValue = DefaultRevealRadius;
+
+            if (!TrySetRevealRadius(minimap, restoreValue))
+                return;
+
+            s_boostApplied = false;
+            s_hasOriginalRevealRadius = false;
+            MelonLogger.Msg($"[MapHack] Restored Minimap.RevealRadius to {restoreValue:F0}.");
+        }
+
+        private static bool TryGetMinimapInstance(out Minimap? minimap)
+        {
+            minimap = null;
+            if (s_minimap != null)
             {
-                minimapFogOfWar.discoveryDistance = 20.0f;
+                minimap = s_minimap;
+                return true;
             }
+
+            if (Time.unscaledTime < s_nextLookupAt)
+                return false;
+
+            try
+            {
+                if (s_minimapCanvas == null)
+                {
+                    s_minimapCanvas = GameObject.Find(MinimapCanvasName);
+                    if (s_minimapCanvas == null)
+                    {
+                        s_nextLookupAt = Time.unscaledTime + LookupRetrySeconds;
+                        return false;
+                    }
+                }
+
+                Minimap? resolved = s_minimapCanvas.GetComponent<Minimap>();
+                if (resolved == null)
+                    resolved = s_minimapCanvas.GetComponentInChildren<Minimap>(true);
+                if (resolved == null)
+                {
+                    s_nextLookupAt = Time.unscaledTime + LookupRetrySeconds;
+                    return false;
+                }
+
+                s_minimap = resolved;
+                minimap = resolved;
+                return true;
+            }
+            catch (Exception e)
+            {
+                s_nextLookupAt = Time.unscaledTime + LookupRetrySeconds;
+                LogErrorThrottled($"[MapHack] Minimap lookup failed: {e.Message}");
+                return false;
+            }
+        }
+
+        private static bool TryGetRevealRadius(Minimap minimap, out float value)
+        {
+            value = DefaultRevealRadius;
+            try
+            {
+                value = minimap.RevealRadius;
+                return true;
+            }
+            catch (Exception e)
+            {
+                LogErrorThrottled($"[MapHack] Reading RevealRadius failed: {e.Message}");
+                return false;
+            }
+        }
+
+        private static bool TrySetRevealRadius(Minimap minimap, float value)
+        {
+            try
+            {
+                minimap.RevealRadius = value;
+                return true;
+            }
+            catch (Exception e)
+            {
+                LogErrorThrottled($"[MapHack] Failed setting RevealRadius: {e.Message}");
+                return false;
+            }
+        }
+
+        private static bool IsBoostRevealRadius(float value)
+        {
+            return Mathf.Abs(value - BoostRevealRadius) <= RevealRadiusComparisonEpsilon;
+        }
+
+        private static void ResetSceneState()
+        {
+            unchecked
+            {
+                s_sceneVersion++;
+            }
+
+            s_minimap = null;
+            s_minimapCanvas = null;
+            s_boostApplied = false;
+            s_restoreAt = 0f;
+            s_nextLookupAt = 0f;
+            s_nextErrorLogAt = 0f;
+            s_originalRevealRadius = DefaultRevealRadius;
+            s_hasOriginalRevealRadius = false;
+        }
+
+        private static void CheckActiveSceneChangedFallback()
+        {
+            if (!s_sceneManagerFallbackEnabled)
+                return;
+
+            try
+            {
+                Scene activeScene = SceneManager.GetActiveScene();
+                int activeSceneHandle = activeScene.handle;
+
+                if (!s_hasLastActiveSceneHandle)
+                {
+                    s_lastActiveSceneHandle = activeSceneHandle;
+                    s_hasLastActiveSceneHandle = true;
+                    return;
+                }
+
+                if (activeSceneHandle == s_lastActiveSceneHandle)
+                    return;
+
+                s_lastActiveSceneHandle = activeSceneHandle;
+                ResetSceneState();
+            }
+            catch (Exception e)
+            {
+                LogErrorThrottled($"[MapHack] SceneManager fallback check failed: {e.Message}");
+            }
+        }
+
+        private static void LogErrorThrottled(string message)
+        {
+            if (Time.unscaledTime < s_nextErrorLogAt)
+                return;
+
+            s_nextErrorLogAt = Time.unscaledTime + ErrorLogCooldownSeconds;
+            MelonLogger.Error(message);
         }
     }
 }

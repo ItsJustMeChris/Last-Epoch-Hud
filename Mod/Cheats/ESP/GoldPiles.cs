@@ -1,11 +1,5 @@
-﻿using Il2Cpp;
+using Il2Cpp;
 using Mod.Game;
-using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using UnityEngine;
 using Color = UnityEngine.Color;
 
@@ -13,27 +7,32 @@ namespace Mod.Cheats.ESP
 {
     internal class GoldPiles
     {
-        public static void GatherGoldPiles()
+        private const string GoldSuffix = " Gold";
+
+        public static void GatherGoldPiles(GameObject player)
         {
-            if (!Settings.DrawGoldPiles()) return;
+            if (!Settings.DrawGoldPiles() || Settings.useLootFilter) return;
             if (GroundGoldVisuals.all == null) return;
 
-            foreach (var item in GroundGoldVisuals.all)
-            {
-                if (!item.gameObject.activeInHierarchy) return;
-                if (Vector3.Distance(ObjectManager.GetLocalPlayer().transform.position, item.transform.position) > Settings.drawDistance) continue;
+            var playerPos = player.transform.position;
+            float maxDistSq = Settings.drawDistance * Settings.drawDistance;
 
-                ESP.AddLine(ObjectManager.GetLocalPlayer().transform.position, item.transform.position, Color.white);
-                ESP.AddString(item.goldValue.ToString() + " Gold", item.transform.position, Color.white);
+            foreach (var item in GroundGoldVisuals.all._list)
+            {
+                if (item?.gameObject == null || !item.gameObject.activeInHierarchy) continue;
+
+                var itemPos = item.transform.position;
+                var delta = itemPos - playerPos;
+                if (delta.sqrMagnitude > maxDistSq) continue;
+
+                ESP.AddLine(playerPos, itemPos, Color.white);
+                ESP.AddString(string.Concat(item.goldValue.ToString(), GoldSuffix), itemPos, Color.white);
             }
         }
 
-        public static void OnUpdate()
+        public static void OnUpdate(GameObject player)
         {
-            if (ObjectManager.HasPlayer())
-            {
-                GatherGoldPiles();
-            }
+            GatherGoldPiles(player);
         }
     }
 }

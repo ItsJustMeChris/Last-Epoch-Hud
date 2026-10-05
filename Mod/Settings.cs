@@ -1,9 +1,4 @@
-﻿using Il2Cpp;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using Il2Cpp;
 
 namespace Mod
 {
@@ -12,11 +7,120 @@ namespace Mod
         public static bool mapHack = true;
         public static float drawDistance = 100.0f;
         public static float autoHealthPotion = 50.0f;
+        public static float autoPotionCooldown = 1.0f; // Configurable cooldown in seconds
+        public static float timeScale = 1.0f;
+        public static bool useAutoPot = true;
         public static bool useLootFilter = true;
+        public static bool enableNetworkDiagnostics = false; // Verbose receive/send diagnostics for troubleshooting
+        public static bool enableDpsMeter = false;
+        public static float dpsMeterWindowSeconds = 5f;
+        public static float dpsMeterInactivityResetSeconds = 10f;
+        public static bool dpsMeterAutoReset = true;
+        public static bool enableDpsMeterOnlineRaw = false;
+        public static int dpsMeterOnlineFilterMode = 0; // 0=AllVisible, 1=LikelyOutgoing, 2=LikelyIncoming
+        public static float dpsMeterNearPlayerMeters = 2.2f;
+        public static float dpsMeterFarPlayerMeters = 3.8f;
+        public static float dpsMeterHpDropCorrelationMs = 180f;
+        public static bool dpsMeterPanelLocked = true;
+        public static float dpsMeterPanelX = -1f; // -1 anchors to right side on first load
+        public static float dpsMeterPanelY = 88f;
+        public static float dpsMeterPanelWidth = 360f;
+        public static float dpsMeterPanelHeight = 320f;
+        public static bool enableDamageNumberDiagnostics = false;
+        public static bool removeFog = true;
+        public static bool cameraZoomUnlock = true;
+        public static bool minimapZoomUnlock = true;
+        public static bool playerLantern = true;
+        public static bool useAnyWaypoint = false;
+        public static bool blockMenuInputWhenOpen = false; // Block keyboard/mouse gameplay input while menu is visible
+        public static bool useAntiIdle = false;
+        // public static bool debugESPNames = false;
+
+        // Item Pickup
+        public static bool pickupCrafting = false;
+
+        // Anti-Idle
+        public static float antiIdleInterval = 120f; // Anti-idle action interval in seconds
+
+        // Simple Anti-Idle (UI pulse)
+        public static bool useSimpleAntiIdle = false; // Invoke UI key handlers instead of crafting packets
+        public static float simpleAntiIdleInterval = 300f; // Default 5 minutes
+        public static bool forceIsIdleFalseFallback = false; // Optional fallback: force IsIdle getters false in online mode
+
+        // Anti-Idle suppression controls
+        public static bool suppressKeepAliveOnActivity = true; // Pause synthetic keepalive when user activity is detected
+        public static float activitySuppressionSeconds = 60f; // How long to suppress after input/activity
+        public static float sceneChangeSuppressionSeconds = 60f; // Suppress on scene change
+        // public static float networkActivitySuppressionSeconds = 0f; // Suppress after any outbound message (0 disables)
+
+        // Auto-Disconnect on Low Health (disabled by default)
+        public static bool useAutoDisconnect = false;
+        public static float autoDisconnectHealthPercent = 35f; // Trigger threshold (percent)
+        public static float autoDisconnectCooldownSeconds = 30f; // Debounce window
+        public static bool autoDisconnectOnlyWhenNoPotions = false; // Require zero potions remaining
+
+        // Minimap Enemy Circles Settings
+        public static bool showMinimapEnemyCircles = true;
+        public static float minimapCircleSize = 6f;
+        public static float minimapScale = 8.3f; // Fallback pixels-per-meter if autoScaleMinimap is disabled
+        public static bool autoScaleMinimap = true; // Derive pixels-per-meter from Icons rect and world radius
+        public static float minimapScaleFactor = 2.67f; // Additional multiplier on computed pixels-per-meter
+        public static float minimapWorldRadiusMeters = 100f; // Real-world radius represented by the minimap visible radius
+        public static bool minimapFlipX = false; // Flip horizontal axis to match DMap handedness
+        public static bool minimapFlipY = false; // Flip vertical axis if needed
+        public static float minimapBasisRotationDegrees = 90f; // Additional rotation to align axes (applied before map rotation)
+        public static bool showMagicMonsters = true;
+        public static bool showRareMonsters = true;
+        public static bool showWhiteMonsters = false;
+        public static bool showBossMonsters = true;
+        public static bool showUniqueMonsters = true;
+        public static float minimapCircleOpacity = 0.9f;
+        public static float minimapNormalCircleSize = 6f;
+        public static float minimapMagicCircleSize = 8f;
+        public static float minimapRareCircleSize = 10f;
+        public static float minimapUniqueCircleSize = 12f;
+        public static float minimapBossCircleSize = 16f;
+        public static string minimapNormalCircleColor = "E53935";
+        public static string minimapMagicCircleColor = "3588FF";
+        public static string minimapRareCircleColor = "F5D328";
+        public static string minimapUniqueCircleColor = "F28C28";
+        public static string minimapBossCircleColor = "F28C28";
+        public static float minimapOffsetX = 0f;
+        public static float minimapOffsetY = 0f;
+        public static float minimapFullscreenScaleCorrection = 0.1422f;
+        public static float minimapFullscreenOffsetX = 0f;
+        public static float minimapFullscreenOffsetY = 0f;
+
+        // ESP: Per-element visibility
+        public static bool showESPLines = false;
+        public static bool showESPLabels = true;
+
+        public static float espVerticalCullMeters = 35f; // Max vertical difference for ESP objects
+
+        // ESP: Per-special toggles
+        public static bool espShowChests = true;
+        public static bool espShowShrines = true;
+        public static bool espShowRunePrisons = true;
+        public static bool espShowChampions = true;
+        public static bool espShowLootLizards = true;
+        public static bool espShowOmens = true;
+
+#if DEBUG
+        // Debug / diagnostics (DEBUG builds only)
+        public static bool debugEnableDiagnostics = false;
+        public static bool debugShowLocalPlayerPanel = true;
+        public static bool debugShowLocalPlayerWorldLabel = true;
+        public static bool debugDrawAllManagerActors = false;
+        public static bool debugDrawAllGroundItems = true;
+        public static bool debugDrawAllGroundGold = false;
+        public static bool debugDrawManagerLines = false;
+        public static bool debugIgnoreDistanceCulling = true;
+        public static int debugMaxEntriesPerSystem = 200;
+#endif
 
         public static Dictionary<string, bool> npcClassifications = new Dictionary<string, bool>
         {
-            { "Normal", true },
+            { "Normal", false },
             { "Magic", true },
             { "Rare", true },
             { "Boss", true }
@@ -24,9 +128,9 @@ namespace Mod
 
         public static Dictionary<string, bool> npcDrawings = new Dictionary<string, bool>
         {
-            { "Good", true },
+            { "Good", false },
             { "Evil", true },
-            { "Barrel", true },
+            { "Barrel", false },
             { "HostileNeutral", true },
             { "FriendlyNeutral", true },
             { "SummonedCorpse", true }
@@ -35,17 +139,18 @@ namespace Mod
         public static Dictionary<string, bool> itemDrawings = new Dictionary<string, bool>
         {
             { "Magic", true },
-            { "Common", true },
+            { "Common", false },
             { "Unique", true },
+            { "Legendary", true },
             { "Rare", true },
             { "Set", true },
             { "Exalted", true },
-            { "Gold Piles", true }
+            { "Gold Piles", false }
         };
 
         public static bool DrawGoldPiles()
         {
-            return itemDrawings["Gold Piles"];
+            return itemDrawings.TryGetValue("Gold Piles", out bool draw) ? draw : false;
         }
 
         public static bool ShouldDrawItemRarity(string rarity)
@@ -63,7 +168,7 @@ namespace Mod
 
         public static bool ShouldDrawNPCAlignment(string alignment)
         {
-            return npcDrawings[alignment];
+            return npcDrawings.TryGetValue(alignment, out bool draw) ? draw : false;
         }
 
         public static bool ShouldDrawNPCClassification(DisplayActorClass actorClass)
@@ -83,7 +188,12 @@ namespace Mod
                     break;
             }
 
-            return npcClassifications[classificationKey];
+            return npcClassifications.TryGetValue(classificationKey, out bool draw) ? draw : false;
+        }
+
+        public static bool ShouldDrawShrine(string shrineType)
+        {
+            return shrineType == "Shrine of Scales" || shrineType == "Shrine of Shards";
         }
     }
 }
